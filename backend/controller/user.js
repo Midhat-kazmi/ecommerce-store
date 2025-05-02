@@ -6,7 +6,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../model/user");
 const sendMail = require("../utils/sendMail");
 const { upload } = require("../utils/multer");
-require("dotenv").config(); // Ensure .env is loaded
+require("dotenv").config();
 
 // ✅ Create User & Send Activation Link
 const createUser = async (req, res) => {
@@ -22,31 +22,31 @@ const createUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "User already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
     const avatarUrl = path.join("/uploads", req.file.filename);
 
     const userPayload = {
       name,
       email,
-      password: hashedPassword,
+      password,
       avatar: {
         public_id: req.file.filename,
         url: avatarUrl,
       },
     };
 
-    // Generate JWT activation token
     const activationToken = jwt.sign(userPayload, process.env.ACTIVATION_SECRET, { expiresIn: "5m" });
     const activationUrl = `http://localhost:5173/activation/${activationToken}`;
 
-    // Send activation email
     await sendMail({
       email,
       subject: "Activate your account",
-      message: `Hello ${name},\n\nClick the link below to activate your account:\n${activationUrl}`,
+      message: `Hello ${name},\n\nClick the link to activate your account:\n${activationUrl}`,
     });
 
-    return res.status(200).json({ success: true, message: `Activation email sent to ${email}` });
+    return res.status(200).json({
+      success: true,
+      message: `Activation email sent to ${email}`,
+    });
   } catch (error) {
     console.error("Create User Error:", error);
     return res.status(500).json({ success: false, message: "Error creating user" });
@@ -74,16 +74,64 @@ const activateUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "User already exists" });
     }
 
+    // ✅ No manual hashing here
     const user = await User.create(newUserData);
-    return res.status(201).json({ success: true, message: "Account activated successfully", user });
+
+    return res.status(201).json({
+      success: true,
+      message: "Account activated successfully",
+      user,
+    });
   } catch (error) {
     console.error("Activation Error:", error);
     return res.status(500).json({ success: false, message: "Activation failed" });
   }
 };
+// login 
+const loginUser =  async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-// ✅ Routes
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: "All fields are required" });
+    }
+
+    const user = await User.findOne({ email }).select("+password");
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Invalid email or password" });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ success: false, message: "Invalid email or password" });
+    }
+
+    const token = user.getJwtToken();
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+      user,
+    });
+  } catch (error) {
+    console.error("Login Error:", error);
+    return res.status(500).json({ success: false, message: "Login failed" });
+  }
+};
+// Routes
 router.post("/create-user", upload.single("file"), createUser);
 router.post("/activation", activateUser);
+router.post("/login-user", loginUser);
+
+
+//load user
+//router.get("/getuser")
 
 module.exports = router;

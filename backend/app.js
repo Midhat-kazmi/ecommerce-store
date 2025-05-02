@@ -9,12 +9,17 @@ const cors = require("cors");
 // Initialize express app
 const app = express();
 
+// ✅ Fix CORS config (before routes)
+app.use(cors({
+  origin: "http://localhost:5173", // allow frontend origin
+  credentials: true,              // allow cookies and auth headers
+}));
+
 // Middleware
 app.use(express.json());
-app.use(cookieParser()); // Cookie parser middleware
+app.use(cookieParser());
 app.use("/", express.static("uploads"));
-app.use(cors()); // CORS middleware
-app.use(bodyParser.urlencoded({ extended: true })); // Body parser middleware
+app.use(bodyParser.urlencoded({ extended: true }));
 
 // Configurations
 if (process.env.NODE_ENV !== "production") {
@@ -23,7 +28,7 @@ if (process.env.NODE_ENV !== "production") {
 
 // Import routes
 const user = require("./controller/user");
-app.use("/api/v2/user", user); // Make sure this route is correctly pointing to the controller
+app.use("/api/v2/user", user);
 
-// Export app for later use
+// Export app
 module.exports = app;
