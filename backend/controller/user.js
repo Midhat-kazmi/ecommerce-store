@@ -143,9 +143,39 @@ router.get("/getuser", isAuthenticated, async (req, res) => {
   }
 });
 
+
+
+//Logout
+const logoutUser = async (req, res) => {
+  try {
+    res.cookie("token", "", {
+      httpOnly: true,
+      expires: new Date(0),
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Logged out successfully",
+    });
+  } catch (error) {
+    console.error("Logout Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Logout failed",
+    });
+  }
+};
+
+
+
+
 // ✅ Routes
 router.post("/create-user", upload.single("file"), createUser);
 router.post("/activation", activateUser);
 router.post("/login-user", loginUser);
+router.get("/logout", logoutUser); 
+
 
 module.exports = router;
