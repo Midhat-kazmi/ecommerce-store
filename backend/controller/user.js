@@ -7,6 +7,7 @@ const User = require("../model/user");
 const sendMail = require("../utils/sendMail");
 const { upload } = require("../utils/multer");
 require("dotenv").config();
+const { isAuthenticated } = require('../middleware/auth');
 
 // ✅ Create User & Send Activation Link
 const createUser = async (req, res) => {
@@ -22,7 +23,8 @@ const createUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "User already exists" });
     }
 
-    const avatarUrl = path.join("/uploads", req.file.filename);
+    // ✅ Correct URL format for frontend usage
+    const avatarUrl = "/" + req.file.path.replace(/\\/g, "/");
 
     const userPayload = {
       name,
@@ -74,7 +76,6 @@ const activateUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "User already exists" });
     }
 
-    // ✅ No manual hashing here
     const user = await User.create(newUserData);
 
     return res.status(201).json({
@@ -87,8 +88,10 @@ const activateUser = async (req, res) => {
     return res.status(500).json({ success: false, message: "Activation failed" });
   }
 };
-// login 
-const loginUser =  async (req, res) => {
+
+// ✅ Login User
+// ✅ Login User
+const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -96,42 +99,72 @@ const loginUser =  async (req, res) => {
       return res.status(400).json({ success: false, message: "All fields are required" });
     }
 
+    // Find the user by email and include password field in the query
     const user = await User.findOne({ email }).select("+password");
     if (!user) {
       return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
+    // Validate password using bcrypt
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
+    // Generate JWT token for the user
     const token = user.getJwtToken();
 
+    // Set the token as a cookie in the response
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      secure: process.env.NODE_ENV === "production", // Ensure secure cookies in production
+      sameSite: "lax", // Allow cross-origin requests
+      maxAge: 7 * 24 * 60 * 60 * 1000, // Cookie expires after 7 days
     });
 
+    // Respond with user data and avatar URL
     return res.status(200).json({
       success: true,
       message: "Login successful",
-      user,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar, // Send avatar URL to the frontend
+      },
+      token, // Optionally send token if needed by the frontend
     });
+
   } catch (error) {
     console.error("Login Error:", error);
     return res.status(500).json({ success: false, message: "Login failed" });
   }
 };
-// Routes
+
+
+// ✅ Load User
+router.get("/getuser", isAuthenticated, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("-password -createdAt -updatedAt -__v");
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (!user.isVerified) {
+      return res.status(401).json({ success: false, message: "Please activate your account first" });
+    }
+
+    return res.status(200).json({ success: true, user });
+  } catch (error) {
+    console.error("Get User Error:", error);
+    return res.status(500).json({ success: false, message: "Error fetching user" });
+  }
+});
+
+// ✅ Routes
 router.post("/create-user", upload.single("file"), createUser);
 router.post("/activation", activateUser);
 router.post("/login-user", loginUser);
-
-
-//load user
-//router.get("/getuser")
 
 module.exports = router;

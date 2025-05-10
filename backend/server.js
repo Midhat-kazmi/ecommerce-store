@@ -1,8 +1,10 @@
-
-const cors = require("cors");
-
-const app = require("./app");
+const app = require("./app"); 
 const connectDatabase = require("./db/Database");
+const express = require("express");
+const path = require("path");
+
+// Serve static files from /uploads
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Handling uncaught exceptions
 process.on("uncaughtException", (err) => {
@@ -11,7 +13,7 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
-// Check if DB_URL and PORT are loaded correctly
+// Ensure environment variables are set
 if (!process.env.DB_URL) {
   console.error("DB_URL not defined in environment variables");
   process.exit(1);
@@ -22,10 +24,10 @@ if (!process.env.PORT) {
   process.exit(1);
 }
 
-// Connect to the database
+// Connect to MongoDB
 connectDatabase();
 
-// Start the server
+// Start server
 const server = app.listen(process.env.PORT, () => {
   console.log(`Server is working on http://localhost:${process.env.PORT}`);
 });
